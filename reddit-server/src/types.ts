@@ -6,3 +6,10 @@ export type MyContext = {
   req: Request;
   res: Response;
 };
+
+//adding properties to session object by using ##declaration merging##
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+  }
+}
