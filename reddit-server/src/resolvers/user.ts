@@ -5,6 +5,7 @@ import {
   InputType,
   Mutation,
   ObjectType,
+  Query,
   Resolver,
 } from 'type-graphql';
 import {MyContext} from '../types';
@@ -40,10 +41,20 @@ class UserResponse {
 
 @Resolver()
 export class UserResolver {
+  @Query(() => User, {nullable: true})
+  async me(@Ctx() {em, req}: MyContext) {
+    //Not logged in user
+    if (!req.session.userId) {
+      return null;
+    }
+    const user = await em.findOne(User, {id: req.session.userId});
+    return user;
+  }
+
   @Mutation(() => UserResponse)
   async register(
     @Arg('options') options: UsernamePasswordInput,
-    @Ctx() {em}: MyContext
+    @Ctx() {em, req}: MyContext
   ): Promise<UserResponse> {
     //input validations
     if (options.username.length <= 2) {
@@ -69,6 +80,7 @@ export class UserResolver {
     }
     //check if username is already exist or not
     const username = await em.findOne(User, {username: options.username});
+
     if (!username) {
       const hashedPassowrd = await argon2.hash(options.password);
       const user = await em.create(User, {
@@ -76,6 +88,12 @@ export class UserResolver {
         password: hashedPassowrd,
       });
       await em.persistAndFlush(user);
+
+      //store user id session
+      //set the cookie on the user
+      //keep user logged in
+      req.session.userId = user.id;
+
       return {
         user,
       };
@@ -119,8 +137,8 @@ export class UserResolver {
         ],
       };
     }
-    req.session.userId = user.id;
 
+    req.session.userId = user.id;
     return {
       user,
     };

@@ -6,13 +6,13 @@ import {buildSchema} from 'type-graphql';
 import {HelloResolver} from './resolvers/hello';
 import {PostResolver} from './resolvers/post';
 import {UserResolver} from './resolvers/user';
-
 import redis from 'redis';
 import session from 'express-session';
 import connectRedis from 'connect-redis';
 import {__prod__} from './constants';
 import {MyContext} from './types';
 import cors from 'cors';
+
 const port = process.env.PORT || 4000;
 
 const main = async () => {
@@ -21,11 +21,17 @@ const main = async () => {
   await orm.getMigrator().up();
   const app = express();
 
-  //cors
-  app.use(cors());
   //redis stuff
   const RedisStore = connectRedis(session);
   const redisClient = redis.createClient();
+
+  //cors
+  app.use(
+    cors({
+      origin: 'http://localhost:3000',
+      credentials: true,
+    })
+  );
   app.use(
     session({
       name: 'qid',
@@ -52,7 +58,12 @@ const main = async () => {
     context: ({req, res}): MyContext => ({em: orm.em, req, res}),
   });
   await apolloServer.start();
-  apolloServer.applyMiddleware({app});
+  apolloServer.applyMiddleware({
+    app,
+    cors: {
+      origin: false,
+    },
+  });
 
   app.listen(port, () => {
     console.log(`Server is running on port:${port}`);
