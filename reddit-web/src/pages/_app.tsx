@@ -1,12 +1,85 @@
 import {ChakraProvider, ColorModeProvider} from '@chakra-ui/react';
-import {Provider, createClient} from 'urql';
+import {Cache, cacheExchange, QueryInput} from '@urql/exchange-graphcache';
+import {Provider, createClient, dedupExchange, fetchExchange} from 'urql';
+import {
+  LoginMutation,
+  LogoutMutation,
+  MeDocument,
+  MeQuery,
+  RegisterMutation,
+} from '../generated/graphql';
 import theme from '../theme';
+
+//fun to cast types
+function betterUpdateQuery<Result, Query>(
+  cache: Cache,
+  qi: QueryInput,
+  result: any,
+  fn: (r: Result, q: Query) => Query
+) {
+  cache.updateQuery(qi, (data) => fn(result, data as any) as any);
+}
 
 const client = createClient({
   url: 'http://localhost:4000/graphql',
   fetchOptions: {
     credentials: 'include',
   },
+  exchanges: [
+    dedupExchange,
+    cacheExchange({
+      //updates [me query] after mutaion is fired
+      updates: {
+        Mutation: {
+          logout: (_result, args, cache, _info) => {
+            //update the [me query to be null upon logout]
+            betterUpdateQuery<LogoutMutation, MeQuery>(
+              cache,
+              {query: MeDocument},
+              _result,
+              () => ({me: null})
+            );
+          },
+          login: (_result, args, cache, _info) => {
+            ///code
+            betterUpdateQuery<LoginMutation, MeQuery>(
+              cache,
+              {query: MeDocument},
+              _result,
+              (result, query) => {
+                if (result.login.errors) {
+                  return query;
+                } else {
+                  return {
+                    me: result.login.user,
+                  };
+                }
+              }
+            );
+          },
+
+          register: (_result, args, cache, _info) => {
+            ///code
+            betterUpdateQuery<RegisterMutation, MeQuery>(
+              cache,
+              {query: MeDocument},
+              _result,
+              (result, query) => {
+                if (result.register.errors) {
+                  return query;
+                } else {
+                  return {
+                    me: result.register.user,
+                  };
+                }
+              }
+            );
+          },
+        },
+      },
+    }),
+    fetchExchange,
+  ],
 });
 
 function MyApp({Component, pageProps}: any) {
